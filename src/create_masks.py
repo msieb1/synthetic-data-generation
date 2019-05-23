@@ -16,7 +16,7 @@ from ipdb import set_trace as st
 DEPTH_TH = 5 # Minimum depth difference after BS
 DEPTH_MIN = 0 # General minimum depth (to exclude erroneous depth values or out of bounds (zeroed out))
 DEPTH_MAX = 80
-RGB_TH = 40 # Minimum rgb difference after BS
+RGB_TH = 30 # Minimum rgb difference after BS
 
 H = 480 
 W = 640
@@ -61,8 +61,8 @@ def grabcut(image_path, save_path, args):
         except:
             break
         
-        # if os.path.exists(join(save_path, file)):
-        #     continue
+        if os.path.exists(join(save_path, file)):
+            continue
         print("file: %s" % file)
 
         img = rgb
@@ -73,15 +73,15 @@ def grabcut(image_path, save_path, args):
         # mask[np.where(valid_depth * valid_rgb)] = 1 
 
         # mask[np.where(valid == False)] = 2
-        mask[:int(0.05*H), 0:int(0.05*W)] = 0
-        mask[-int(0.05*H):, 0:int(0.05*W)] = 0
+        mask[:int(0.3*H), 0:int(0.2*W)] = 0
+        mask[-int(0.1*H):, 0:int(0.2*W)] = 0
         # mask[:200, 0:50] = 0
-        mask[-int(0.05*H):, -int(0.05*W):] = 0
-        mask[:int(0.05*H), -int(0.05*W):] = 0
+        mask[-int(0.1*H):, -int(0.2*W):] = 0
+        mask[:int(0.3*H), -int(0.2*W):] = 0
         bgdModel = np.zeros((1,65),np.float64)
         fgdModel = np.zeros((1,65),np.float64)
         rect = (int(0.1*W), int(0.1*H), int(0.9*W), int(0.9*H) ) # (x, y, w, h)
-        mask, bgdModel, fgdModel = cv2.grabCut(img,mask,None,bgdModel,fgdModel,7,cv2.GC_INIT_WITH_MASK)
+        mask, bgdModel, fgdModel = cv2.grabCut(img,mask,None,bgdModel,fgdModel,13,cv2.GC_INIT_WITH_MASK)
         mask = np.where((mask==2)|(mask==0),0,1).astype('uint8')
         rps = sorted((regionprops(label(mask > 0.5, background=0))), key=lambda x: x.area, reverse=True)
         mask_clean = np.zeros(mask.shape)
@@ -90,10 +90,10 @@ def grabcut(image_path, save_path, args):
         mask_clean_ = copy(mask_clean)
         mask_clean = ndi.binary_fill_holes(mask_clean_).astype(np.uint8)
         img_masked = img*mask_clean[:,:,np.newaxis]
-        np.save(join(save_path, '{}'.format(file.strip('.png'))), mask_clean)
-        cv2.imwrite(join(save_path, '{}.png'.format(file.strip('.png'))), img)
+        np.save(join(save_path, '{}'.format(file[:-4])), mask_clean)
+        cv2.imwrite(join(save_path, '{}.png'.format(file[:-4])), img)
 
-        cv2.imwrite(join(save_path, '{}_masked.png'.format(file.strip('.png'))), img_masked.astype(np.uint8)[:, :, :])
+        cv2.imwrite(join(save_path, '{}_masked.png'.format(file[:-4])), img_masked.astype(np.uint8)[:, :, :])
         cv2.imshow('frame',rgb.astype(np.uint8))
         vis_mask = ndi.binary_erosion(mask)
         cv2.imshow('mask', mask_clean*255)

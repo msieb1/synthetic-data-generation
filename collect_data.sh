@@ -15,7 +15,7 @@
 ##### Sorted by experiments and depth, audio, video are subfolders #####
 dataset=$1  # Name of the dataset.
 seqname="$2" # Name of Object!
-num_views=2 # Number of webcams.
+num_views=1 # Number of webcams.
 expdir=/media/zhouxian/ed854110-6801-4dcd-9acf-c4f904955d71/iccv2019/synthetic_data_generation
 viddir=images # Output directory for the videos.
 depthdir=depth

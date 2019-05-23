@@ -183,7 +183,7 @@ def main():
   # device_indices = ['1', '2', '3']
   for device in devices:
     print(device)
-  device_indices = ['1', '3'] # cross-check with IDs assigned in /home/zhouxian/ros_ws/src/realsense-2.1.0/realsense2_camera/launch/rs_multiple_devices.launch
+  device_indices = ['2'] # cross-check with IDs assigned in /home/zhouxian/ros_ws/src/realsense-2.1.0/realsense2_camera/launch/rs_multiple_devices.launch
   collect_n_pictures_parallel(device_indices)
 
   print("Save images to file..")

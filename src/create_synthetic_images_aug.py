@@ -12,9 +12,11 @@ from numpy.random import randint
 import importlib
 from ipdb import set_trace
 import time
+import imgaug as ia
+from imgaug import augmenters as iaa
 plt.ion()
 
-
+ia.seed(1)
 ## EXAMPLE USAGE ####
 # python create_synthetic_images.py -i /home/msieb/projects/gps-lfd/demo_data/four_objects -e four_objects -m train
 # SET EXPNAME IN CONFIG.PY
@@ -34,8 +36,8 @@ args = parser.parse_args()
 
 MAX_SHIFT_COL = 90
 MAX_SHIFT_ROW = 180
-N_ADDED_MIN = 1
-N_ADDED_MAX = 2
+N_ADDED_MIN = 3
+N_ADDED_MAX = 4
 
 def main(args):
     gen = SyntheticImageGenerator(args)
@@ -60,7 +62,7 @@ class SyntheticImageGenerator(object):
         all_images_to_add = []
         for folder in os.listdir(self.mask_root_path):
             mask_path = join(self.mask_root_path, folder)
-            all_images_to_add.extend([file for file in os.listdir(mask_path) if (file.endswith('.jpg') or file.endswith('.png')) and not 'masked' in file and ('mugs' in file or 'cans' in file)])
+            all_images_to_add.extend([file for file in os.listdir(mask_path) if (file.endswith('.jpg') or file.endswith('.png')) and not 'masked' in file  and not 'hand' in file and not 'robot' in file])
         random.shuffle(all_images_to_add)
         
         for itr in range(n_iter):
@@ -77,12 +79,13 @@ class SyntheticImageGenerator(object):
                 print("="*20)
 
                 cv2.imwrite(join(self.save_path, save_name + '.png'), img_overlayed)
-                np.save(join(self.save_path, save_name + '.npy'), mask_overlayed)
-                np.save(join(self.save_path, save_name + '_labels.npy'), mask_labels)
+                # np.save(join(self.save_path, save_name + '.npy'), mask_overlayed)
+                # np.save(join(self.save_path, save_name + '_labels.npy'), mask_labels)
+                cv2.imwrite(join(self.save_path, save_name + '_maskvis.png'), mask_overlayed*255)
 
-                cv2.imshow('img_overlayed',img_overlayed)
+                # cv2.imshow('img_overlayed',img_overlayed)
 
-                k = cv2.waitKey(1)
+                k = cv2.waitKey(50)
 
     def make_synthetic_image(self, file_base, added_images):
 
@@ -101,7 +104,7 @@ class SyntheticImageGenerator(object):
         img_overlayed = copy(img_base)
 
         # Perturb background
-        scale = np.random.uniform(0.8,1.0)
+        scale = np.random.uniform(0.6,1.1)
         img_perturbed = copy(img_overlayed)
         img_perturbed = (img_perturbed * scale).astype(np.uint8)
         img_perturbed[np.where(img_perturbed > 255)] = 255
@@ -123,16 +126,61 @@ class SyntheticImageGenerator(object):
             mask_labels.append(self.mask_root_path.split('/')[-1])
 
             # Mask image
+            # img_added_masked = img_added * mask_added[:,:,np.newaxis]
+            
+            aff = iaa.Sequential(
+                [
+                    iaa.Fliplr(0.5), # horizontally flip 50% of all images
+                    iaa.Flipud(0.2), # vertically flip 20% of all images
+
+                    
+                    iaa.Affine(
+                    scale={"x": (0.7, 1.3), "y": (0.7, 1.3)},
+                    translate_percent={"x": (-0.2, 0.2), "y": (-0.2, 0.2)},
+                    rotate=(-90, 90),
+                    shear=(-15, 15)
+                )
+                ])
+            # Affine transform
+            aff_det = aff.to_deterministic()
+            img_added = aff_det.augment_image(img_added)
+            mask_added = aff_det.augment_image(mask_added)
+
+            # Static Transform
+            st = iaa.SomeOf((0, 3),
+                [
+                iaa.AdditiveGaussianNoise(
+                    loc=0, scale=(0.0, 0.02*255), per_channel=0.5
+                ),
+
+
+                # Change brightness of images (50-150% of original value).
+                iaa.Multiply((0.8, 1.2), per_channel=0.0),
+
+                # Improve or worsen the contrast of images.
+                iaa.ContrastNormalization((0.8, 1.2), per_channel=0.5),
+                iaa.OneOf([
+                    iaa.Dropout((0.005, 0.01), per_channel=0.0),
+                    iaa.CoarseDropout(
+                        (0.01, 0.05), size_percent=(0.01,0.05),
+                        per_channel=0.0
+                    ),
+                ]),
+              # Add a value of -10 to 10 to each pixel.
+                iaa.Add((-10, 30), per_channel=0.0),
+                ]
+            )
+            img_added = st.augment_image(img_added)
             img_added_masked = img_added * mask_added[:,:,np.newaxis]
 
-            # Augment masks
-            img_added_masked, mask_added = self.translate_mask(img_added_masked, mask_added, \
-                                                            row_shift=randint(-MAX_SHIFT_ROW, MAX_SHIFT_ROW), \
-                                                            col_shift=randint(-MAX_SHIFT_COL, MAX_SHIFT_COL))
-            img_added_masked, mask_added = self.rotate_mask(img_added_masked, mask_added, \
-                                                            angle=randint(-180,180,1), center=None, \
-                                                            scale=np.random.uniform(0.9, 1.1))
-            img_added_masked, mask_added = self.perturb_intensity(img_added_masked, mask_added, scale=np.random.uniform(0.9,1.1))
+            # # Augment masks
+            # img_added_masked, mask_added = self.translate_mask(img_added_masked, mask_added, \
+            #                                                 row_shift=randint(-MAX_SHIFT_ROW, MAX_SHIFT_ROW), \
+            #                                                 col_shift=randint(-MAX_SHIFT_COL, MAX_SHIFT_COL))
+            # img_added_masked, mask_added = self.rotate_mask(img_added_masked, mask_added, \
+            #                                                 angle=randint(-180,180,1), center=None, \
+            #                                                 scale=np.random.uniform(0.9, 1.1))
+            # img_added_masked, mask_added = self.perturb_intensity(img_added_masked, mask_added, scale=np.random.uniform(0.9,1.1))
 
             # Apply masks
             img_overlayed[np.where(mask_added == 1)] = img_added_masked[np.where(mask_added == 1)]
